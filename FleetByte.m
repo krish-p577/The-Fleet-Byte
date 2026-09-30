@@ -134,6 +134,8 @@ persistent direction_estimate;
 persistent velocityEstimate
 persistent positionHistory
 
+hr_prev = 70;
+
 heartrate_estimate = 0;
 persistent MPS;
 MPS = [];
@@ -213,33 +215,38 @@ while(idx<=secs)               %% Main simulation loop
      pause;
  end;
  
- %%% SOLUTION:  
-
- %function [xyzRMS,velRMS,angRMS,hrRMS]=FleetByte(secs, map, deb)
- % [MPS,HRS,Rg]=Sim1(map); 
-    
-
- %fprintf(2, "MPS = %s\n", mat2str(MPS));
- %fprintf(2, "HRS=%s\n", mat2str(HRS));
- %fprintf(2,"RG=%f\n", Rg);
-
- %for location first lets just use MPS to calculate movement
+ %%% SOLUTION: 
 
 
- heartrate_estimate =  heartrate_estimate + 5;
- %xyz = [heartrate_estimate,350,205];
- %xyz = [MPS(1), MPS(2), MPS(3)];
- %fprintf(2, "THE MPS VALUE IS: %d", MPS(1))
- %xyz = MPS;
- xyz(3) = 0.5;
-
-
- %finding location
  
 
+ %%%%%%%%%% HEART RATE (simple) %%%%%%%%%%
+ hr_thr = 0.5;
+ hr_skip = 1.0;
+ n_recent = 3;
 
+ sig = HRS(1:end - round(hr_skip*120));
+ above = sig(:) > hr_thr;
+ up = find(~above(1:end-1) & above(2:end));
 
+ beats = [];
+ for jj = 1:numel(up)
+     if isempty(beats) || up(jj) - beats(end) >= 32
+         beats(end+1) = up(jj);
+     end
+ end
 
+ ibi = diff(beats);
+ if idx == 1 && numel(ibi) >= 3
+     hr = 60 / ((median(ibi) / 120));
+     hr_prev = hr;
+ elseif numel(ibi) >= n_recent
+     ibi = ibi(end-n_recent+1:end);
+     hr  = 60 / ((median(ibi) / 120));
+     hr_prev = hr;
+ else
+     hr = hr_prev;          
+ end
 
 
  %%%%%%%%%%%%%%%%%%  DO NOT CHANGE ANY CODE BELOW THIS LINE %%%%%%%%%%%%%%%%%%%%%
