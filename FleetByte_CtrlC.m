@@ -249,7 +249,7 @@ while(idx<=secs)               %% Main simulation loop
      tt = (1:n_use)'; %time to n_use
      px = polyfit(tt, recent(:,1), 1); %best fit for x axis
      py = polyfit(tt, recent(:,2), 1); % y-axis
-     xyz(1) = polyval(px, n_use); %read
+     xyz(1) = polyval(px, n_use); 
      xyz(2) = polyval(py, n_use);
  else
      xyz(1:2) = mean(recent, 1); %not enough data so we guess
