@@ -137,9 +137,35 @@ persistent positionHistory
 hr_prev = 70;
 
 heartrate_estimate = 0;
-persistent MPS;
-MPS = [];
+%persistent MPS;
+%MPS = [];
 
+persistent mps_hist;
+mps_hist = [];
+
+%velocty calc vars
+vel_N      = 6;
+vel_minpts = 5; %min readings
+vel_alpha  = 0.9; %dont change
+vel_gain   = 1; %also dont change
+vel_min    = 0; 
+
+vel_max    = 30;
+vel_init   = 10; %startnig guess
+vel_prev   = vel_init;
+
+%direction calc vars
+dir_N       = 3; %readings
+dir_minpts  = 3;  %min readings
+dir_M       = 3; %offset
+dir_use_now = 1; %dont change
+theta_rel   = 0;  %total dir
+off_hist    = [];
+
+% pos calc vars
+%pos_w   = 1;  
+%pos_lag = 0;  
+%pos_est = []; 
 
 %%%%%%%%%% ... AND THIS LINE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -199,11 +225,6 @@ while(idx<=secs)               %% Main simulation loop
  %          corresponding estimate, taken over time. 
  %    
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
- xyz=[128 128 .5];       % Replace with your computation of position, the map is 512x512 pixels in size
- hr=82;                  % Replace with your computation of heart rate
- di=[0 1];               % Replace with your computation for running direction, this should be a 2D unit vector
- vel=5;                  % Replace with your computation of running velocity, in Km/h
  
  if (deb==1)
      figure(5);clf;plot(HRS);
@@ -215,12 +236,67 @@ while(idx<=secs)               %% Main simulation loop
      pause;
  end;
  
- %%% SOLUTION: 
+ %%% SOLUTION: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+ % POSITION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+ pos_N = 5;
+ mps_hist(end+1,:) = MPS(1:2);
+ n_use  = min(pos_N, size(mps_hist,1));
+ recent = mps_hist(end-n_use+1:end, :); %recent readings
+
+ if n_use >= 3
+     tt = (1:n_use)'; %time to n_use
+     px = polyfit(tt, recent(:,1), 1); %best fit for x axis
+     py = polyfit(tt, recent(:,2), 1); % y-axis
+     xyz(1) = polyval(px, n_use); %read
+     xyz(2) = polyval(py, n_use);
+ else
+     xyz(1:2) = mean(recent, 1); %not enough data so we guess
+ end
+
+ xyz(3) = 0.5; %change later?
 
 
- 
+ % VELOCITY %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ n_v = min(vel_N, size(mps_hist,1));
+ if n_v >= vel_minpts
+     rv = mps_hist(end-n_v+1:end, :);
+     tv = (1:n_v)';
+     cx = polyfit(tv, rv(:,1), 1);
+     cy = polyfit(tv, rv(:,2), 1);
+     v_raw = sqrt(cx(1)^2 + cy(1)^2) * 3.6 * vel_gain;
+     v_raw = min(max(v_raw, vel_min), vel_max);
+     vel = vel_alpha*v_raw + (1 - vel_alpha)*vel_prev; %use both 
+ else
+     vel = vel_init;
+ end
+ vel_prev = vel;
 
- %%%%%%%%%% HEART RATE (simple) %%%%%%%%%%
+% DIRECTION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ theta_rel = theta_rel + Rg; %update with new rg value
+
+ n_d = min(dir_N, size(mps_hist,1));
+ if n_d >= dir_minpts
+     rd = mps_hist(end-n_d+1:end, :);
+     td = (1:n_d)';
+     dx = polyfit(td, rd(:,1), 1);
+     dy = polyfit(td, rd(:,2), 1);
+     th_pos = atan2(dy(1), dx(1));%heading from positions
+     off_hist(end+1) = th_pos - theta_rel; %difference between headings
+ end
+
+ if ~isempty(off_hist)
+     rec = off_hist(max(1,end-dir_M+1):end); %how  may offsets used
+     offset = atan2(mean(sin(rec)), mean(cos(rec))); %avg of angles
+ else
+     offset = 0;%not enough data 
+ end
+
+ theta = theta_rel + offset - (1 - dir_use_now)*Rg;
+ di = [cos(theta) sin(theta)]; %unit direction vector 
+
+ % HEART RATE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
  hr_thr = 0.5;
  hr_skip = 1.0;
  n_recent = 3;
